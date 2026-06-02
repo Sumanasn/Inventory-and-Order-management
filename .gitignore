@@ -1,0 +1,26 @@
+# Python virtual environments and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.pytest_cache/
+
+# Node/React dependencies and production builds
+node_modules/
+build/
+dist/
+.eslintcache
+
+# Environment variables and secrets
+.env
+.env.local
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDE configuration folders
+.vscode/
+.idea/
