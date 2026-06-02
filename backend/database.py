@@ -2,7 +2,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Added '+psycopg' to explicitly tell SQLAlchemy to use the modern Psycopg 3 driver we installed
+# Production environment variable path pointing to the Docker db container
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@db:5432/inventory_db")
 
 # Create the database engine
