@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime
+import re
 
 
 # PRODUCT SCHEMAS 
@@ -32,7 +33,22 @@ class ProductResponse(ProductBase):
 class CustomerBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Full name")
     email: EmailStr = Field(..., description="Email address")
-    phone: Optional[str] = Field(None, max_length=20, description="Phone number")
+    phone: Optional[str] = Field(None, description="Phone number")
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone_number(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+
+        cleaned=value.strip()
+
+        phone_regex=re.complie(r'^\+?[1-9]\d{9,14}$')
+
+        if not phone_regex.match(cleaned):
+            raise ValueError("Invalid phone number format. Must contain a country code and a valid 10-digit number")
+        return cleaned
+
 
 class CustomerCreate(CustomerBase):
     pass
