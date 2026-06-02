@@ -43,7 +43,7 @@ class CustomerBase(BaseModel):
 
         cleaned=value.strip()
 
-        phone_regex=re.complie(r'^\+?[1-9]\d{9,14}$')
+        phone_regex=re.compile(r'^\+?[1-9]\d{9,14}$')
 
         if not phone_regex.match(cleaned):
             raise ValueError("Invalid phone number format. Must contain a country code and a valid 10-digit number")

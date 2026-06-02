@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # --- DATABASE CONTAINER ---
+  db:
+    image: postgres:16-alpine
+    container_name: inventory_postgres_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: inventory_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: always
+
+  # --- FASTAPI BACKEND CONTAINER ---
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_backend_app
+    ports:
+      - "8080:8000"
+    environment:
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/inventory_db
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - db
+    networks:
+      - app-network
+    restart: always
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
