@@ -4,11 +4,29 @@ from typing import List
 
 import models, schemas
 from database import engine, Base, get_db
+from fastapi.middleware.cors import CORSMiddleware
+import os
 
 # Create the database tables automatically on startup
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Inventory and Order Management System")
+
+RAW_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS", 
+    "http://localhost:5173,http://localhost:3000"
+)
+
+# 2. Parse the comma-separated string into a clean Python list
+ALLOWED_ORIGINS = [origin.strip() for origin in RAW_ORIGINS.split(",") if origin.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,  # Securely locked to explicit domains!
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Restricted to exactly what your app needs
+    allow_headers=["Content-Type", "Authorization"], # Explicitly white-list headers
+)
 
 # ==========================================
 # PRODUCT ENDPOINTS 
@@ -183,3 +201,34 @@ def delete_order(id: int, db: Session = Depends(get_db)):
     db.delete(order)
     db.commit()
     return None
+
+# ==========================================
+# DASHBOARD METRICS ENDPOINT
+# ==========================================
+@app.get("/dashboard/summary")
+def get_dashboard_summary(db: Session = Depends(get_db)):
+    # 1. Fetch scalar calculations for metrics
+    total_products = db.query(models.Product).count()
+    total_customers = db.query(models.Customer).count()
+    total_orders = db.query(models.Order).count()
+    
+    # 2. Filter products where inventory stock falls below an alert threshold (e.g., less than 10 units)
+    low_stock_threshold = 10
+    low_stock_products = db.query(models.Product).filter(
+        models.Product.quantity <= low_stock_threshold
+    ).all()
+    
+    # 3. Package it neatly to match our UI specifications
+    return {
+        "total_products": total_products,
+        "total_customers": total_customers,
+        "total_orders": total_orders,
+        "low_stock_products": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "sku": p.sku,
+                "quantity": p.quantity
+            } for p in low_stock_products
+        ]
+    }

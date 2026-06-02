@@ -1,13 +1,13 @@
 version: '3.8'
 
 services:
-  # --- DATABASE CONTAINER ---
+  # 1. PostgreSQL Database Service
   db:
     image: postgres:16-alpine
     container_name: inventory_postgres_db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: password
       POSTGRES_DB: inventory_db
     ports:
       - "5432:5432"
@@ -15,25 +15,31 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
-    restart: always
 
-  # --- FASTAPI BACKEND CONTAINER ---
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  # 2. FastAPI Backend Service
+  backend:
+    build: ./backend
     container_name: fastapi_backend_app
     ports:
       - "8080:8000"
     environment:
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/inventory_db
-    volumes:
-      - ./backend:/app
+      - DATABASE_URL=postgresql://postgres:password@db:5432/inventory_db
+      - ALLOWED_ORIGINS=http://localhost,http://localhost:80
     depends_on:
       - db
     networks:
       - app-network
-    restart: always
+
+  # 3. React Frontend Service (Newly Added)
+  frontend:
+    build: ./frontend
+    container_name: react_frontend_app
+    ports:
+      - "80:80"  # Maps standard HTTP port 80 to our Nginx web server
+    depends_on:
+      - backend
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
