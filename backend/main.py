@@ -11,7 +11,7 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Inventory and Order Management System")
 
 # ==========================================
-# PRODUCT ENDPOINTS (Ref: Section 3.1)
+# PRODUCT ENDPOINTS 
 # ==========================================
 @app.post("/products", response_model=schemas.ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)):
@@ -70,7 +70,7 @@ def delete_product(id: int, db: Session = Depends(get_db)):
 
 
 # ==========================================
-# CUSTOMER ENDPOINTS (Ref: Section 3.2)
+# CUSTOMER ENDPOINTS
 # ==========================================
 @app.post("/customers", response_model=schemas.CustomerResponse, status_code=status.HTTP_201_CREATED)
 def create_customer(customer: schemas.CustomerCreate, db: Session = Depends(get_db)):
@@ -108,52 +108,57 @@ def delete_customer(id: int, db: Session = Depends(get_db)):
 
 
 # ==========================================
-# ORDER ENDPOINTS (Ref: Section 3.3)
+# ORDER ENDPOINTS
 # ==========================================
 @app.post("/orders", response_model=schemas.OrderResponse, status_code=status.HTTP_201_CREATED)
-def create_order(order_data: schemas.OrderCreate, db: Session = Depends(get_db)):
-    # 1. Verify the customer actually exists
-    customer = db.query(models.Customer).filter(models.Customer.id == order_data.customer_id).first()
+def create_order(order: schemas.OrderCreate, db: Session = Depends(get_db)):
+    # 1. Verify customer exists
+    customer = db.query(models.Customer).filter(models.Customer.id == order.customer_id).first()
     if not customer:
-        raise HTTPException(status_code=404, detail="Customer reference not found")
+        raise HTTPException(status_code=404, detail="Customer not found")
     
-    total_amount = 0.0
-    order_items_to_create = []
-    products_to_update = []
-
-    # 2. Process items and validate inventory levels in a single operation
-    for item in order_data.items:
+    # 2. First pass: Validate stock availability AND compute total order price
+    computed_total_amount = 0.0
+    
+    for item in order.items:
         product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
         if not product:
             raise HTTPException(status_code=404, detail=f"Product ID {item.product_id} not found")
         
+        # Guardrail check for stock availability
         if product.quantity < item.quantity:
             raise HTTPException(
                 status_code=400, 
                 detail=f"Insufficient stock for product '{product.name}'. Available: {product.quantity}, Requested: {item.quantity}"
             )
         
-        # Calculate pricing logic safely
-        total_amount += product.price * item.quantity
-        
-        # Deduct from stock safely
-        product.quantity -= item.quantity
-        products_to_update.append(product)
-        
-        # Stage the order line item data
-        order_items_to_create.append(models.OrderItem(product_id=item.product_id, quantity=item.quantity))
+        # Accumulate the calculation: (Item Price * Requested Quantity)
+        computed_total_amount += product.price * item.quantity
 
-    # 3. Create the parent order database row
-    new_order = models.Order(customer_id=order_data.customer_id, total_amount=total_amount)
+    # 3. Create the master order record with its calculated total
+    new_order = models.Order(
+        customer_id=order.customer_id,
+        total_amount=computed_total_amount  # Safe backend-calculated total
+    )
     db.add(new_order)
-    db.flush() # Flushes order to database to populate new_order.id without committing yet
+    db.flush()  # Generates the new_order.id to link the child rows below
 
-    # 4. Bind the order ID to items and save them
-    for order_item in order_items_to_create:
-        order_item.order_id = new_order.id
+    # 4. Second pass: Deduct stock levels and save line items
+    for item in order.items:
+        product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        
+        # Safe structural stock reduction
+        product.quantity -= item.quantity
+        
+        # Build individual line item history records
+        order_item = models.OrderItem(
+            order_id=new_order.id,
+            product_id=item.product_id,
+            quantity=item.quantity
+        )
         db.add(order_item)
-
-    # 5. Execute transaction atomically to save everything securely together
+    
+    # 5. Atomically save the complete transaction to PostgreSQL
     db.commit()
     db.refresh(new_order)
     return new_order
