@@ -5,7 +5,16 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.exc import OperationalError
 
 # Production environment variable path pointing to the Docker db container
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@db:5432/inventory_db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    print("CRITICAL ERROR: DATABASE_URL environment variable is missing!")
+    sys.exit(1)
+
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
 
 # Enterprise Connection Retry Loop
 # This prevents crashes when the app boots faster than the database container
@@ -24,7 +33,7 @@ for attempt in range(1, MAX_RETRIES + 1):
             break
     except OperationalError as e:
         if attempt == MAX_RETRIES:
-            print("❌ Could not connect to the database. Max retries reached.")
+            print("Could not connect to the database. Max retries reached.")
             raise e
         print(f" Database not ready yet. Retrying in {RETRY_DELAY} seconds...")
         time.sleep(RETRY_DELAY)
